@@ -1,5 +1,5 @@
 /**
- *	Filemanager JS core
+ *	Rich Filemanager JS core
  *
  *	filemanager.js
  *
@@ -21,6 +21,193 @@ $.urlParam = function(name) {
 		return 0;
 	}
 };
+
+	$.richFmPlugin = function(element, options)
+	{
+		/**
+		 * Plugin's default options
+		 */
+		var defaults = {
+			config: {}
+		};
+
+		/**
+		 * The reference the current instance of the object
+		 */
+		var fm = this;
+
+		/**
+		 * Private properties accessible only from inside the plugin
+		 */
+		var $container = $(element),	// reference to the jQuery version of DOM element the plugin is attached to
+			pluginPath = '.',			// relative path to the FM plugin folder
+			userconfig;			// relative path to the FM plugin folder
+
+		/**
+		 * This holds the merged default and user-provided options.
+		 * Plugin's properties will be available through this object like:
+		 * - plugin.settings.propertyName from inside the plugin
+		 * - element.data('pluginName').settings.propertyName from outside the plugin, where "element" is the element the plugin is attached to;
+		 * @type {{}}
+		 */
+		fm.config = {};
+
+		//// reference to the wrapper of Handsontable and its buttons
+		//plugin.wrapper = $hot.closest('.handsontable-wrapper');
+		//// reference to "autosave" checkbox
+		//plugin.autosave = $('.hot-autosave', plugin.wrapper);
+		//// reference to autosave interval object
+		//plugin.interval = null;
+		//// if there are changes in table that weren't saved as drafts
+		//plugin.isUnsavedChanges = false;
+		//// if there are changes in table that weren't saved as drafts
+		//plugin.lastChangedRows = [];
+
+
+		/**
+		 * The "constructor" method that gets called when the object is created
+		 */
+		fm.init = function()
+		{
+			console.log('init');
+			// The plugin's final properties are the merged default and user-provided options (if any)
+			fm.settings = $.extend(true, defaults, options);
+
+			if (window._FMConfig && window._FMConfig.pluginPath) {
+				pluginPath = window._FMConfig.pluginPath;
+			}
+
+			var err = function( req, status, err ) {
+				alert( '<p>something went wrong</p>'+ err );
+			};
+
+			// loading default configuration file
+			var promiseDefault = jQuery.Deferred();
+			// loading user configuration file
+			var promiseUser = jQuery.Deferred();
+			var json = jQuery.Deferred();
+
+			// loading default configuration file
+			var promiseA = loadConfigFile('default');
+			promiseA.then( function (data) {
+				json = data;
+				promiseDefault.resolve(json);
+			},err);
+			// loading user configuration file
+			var promiseB = loadConfigFile('user');
+			promiseB.then( function (data) {
+				json = data;
+				promiseUser.resolve(json);
+			}, err);
+
+			//$.when(promiseDefault, promiseUser).done(function(configd, config) {
+			$.when(loadConfigFile('default'), loadConfigFile('user')).done(function(configd, config) {
+				console.log(configd, config);
+				// remove version from user config file
+				if (fm.config != undefined && fm.config !== null) delete fm.config.version;
+				// merge default config and user config file
+				fm.config = $.extend({}, configd, config, pluginPath);
+				console.log(pluginPath);
+				console.log(config);
+
+				if(fm.config.options.logger) fm.start = new Date().getTime();
+
+				// Sets paths to connectors based on language selection.
+				fm.fileConnector = fm.config.options.fileConnector ||  fm.config.globals.pluginPath + '/connectors/' + fm.config.options.lang + '/filemanager.' + fm.config.options.lang;
+
+				// Sets paths to connectors based on language selection.
+				fm.langConnector = '/connectors/' + fm.config.options.lang + '/filemanager.' + fm.config.options.lang;
+
+				// Read capabilities from config files if exists else apply default settings
+				fm.capabilities = fm.config.options.capabilities || ['upload', 'select', 'download', 'rename', 'move', 'delete', 'replace'];
+
+				// Defines sort params
+				var chunks = [];
+				if(fm.config.options.fileSorting) {
+					chunks = fm.config.options.fileSorting.toLowerCase().split('_');
+				}
+
+				fm.config.configSortField = chunks[0] || 'name';
+				fm.config.configSortOrder = chunks[1] || 'asc';
+
+				// Get localized messages from file through culture var or from URL
+				if($.urlParam('langCode') != 0) {
+					file_exists( fm.config.globals.pluginPath + '/scripts/languages/'  + $.urlParam('langCode') + '.json').done(
+						function(result) {
+							if (result) {
+								fm.config.options.culture = $.urlParam('langCode');
+							} else {
+								var urlLang = $.urlParam('langCode').substring(0, 2);
+								file_exists( fm.config.globals.pluginPath + '/scripts/languages/'  + fm.urlLang + '.json').done(
+									function(result) {
+										if(result) {
+											fm.config.options.culture = urlLang;
+										}
+									}
+								);
+							}
+						});
+				}
+
+				wrapperInitConfigLastPromise = $.Deferred(function() {
+					var self = this;
+					$.ajax({
+						url: fm.config.globals.pluginPath + '/scripts/languages/'  + fm.config.options.culture + '.json',
+						dataType: 'json'
+					}).done( function (json) {
+						fm.lg = json;
+						initConfigLastPromise.resolve(json);
+						self.resolve(json);
+					});
+				}).promise();
+			});
+		};
+
+		/**
+		 * Public methods
+		 * Can be called like:
+		 * - plugin.methodName(arg1, arg2, ... argn) from inside the plugin
+		 * - element.data('pluginName').publicMethod(arg1, arg2, ... argn) from outside the plugin, where "element" is the element the plugin is attached to
+		 */
+
+		fm.getHotData = function()
+		{
+			return 1;
+		};
+
+		/**
+		 * Private methods
+		 * These methods can be called only from inside the plugin like: methodName(arg1, arg2, ... argn)
+		 */
+
+		// Retrieves config settings from config files
+		var loadConfigFile = function (type) {
+			console.log('loadConfigFile', type);
+			var url = null;
+			type = (typeof type === "undefined") ? "user" : type;
+
+			if(type === 'user') {
+				if($.urlParam('config') != 0) {
+					url = pluginPath + '/scripts/' + $.urlParam('config');
+					userconfig = $.urlParam('config');
+				} else {
+					url = pluginPath + '/scripts/filemanager.config.json';
+					userconfig = 'filemanager.config.json';
+				}
+			} else {
+				url = pluginPath + '/scripts/filemanager.config.default.json';
+			}
+
+			return $.ajax({
+				url: url,
+				dataType: "json",
+				cache: false
+			});
+		};
+
+		// call the "constructor" method
+		fm.init();
+	};
 
 /*---------------------------------------------------------
   Setup, Layout, and Status Functions
@@ -2932,6 +3119,35 @@ $(window).load(function() {
 });
 
 })(jQuery);
+
+// add the plugin to the jQuery.fn object
+$.fn.richFm = function(options) {
+
+	// iterate through the DOM elements we are attaching the plugin to
+	return this.each(function() {
+
+		// if plugin has not already been attached to the element
+		if (undefined == $(this).data('richFm')) {
+
+			/**
+			 * Creates a new instance of the plugin
+			 * Pass the DOM element and the user-provided options as arguments
+			 */
+			var plugin = new $.richFmPlugin(this, options);
+
+			/**
+			 * Store a reference to the plugin object
+			 * The plugin are available like:
+			 * - element.data('pluginName').publicMethod(arg1, arg2, ... argn);  for methods
+			 * - element.data('pluginName').settings.propertyName;  for properties
+			 */
+			$(this).data('richFm', plugin);
+		}
+	});
+
+};
+console.log('richFmInit');
+$('.fm-container').richFm();
 
 
 // add location.origin for IE
