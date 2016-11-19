@@ -947,6 +947,9 @@ var selectItem = function(data) {
 		 	if(typeof parent.$.fn.colorbox !== "undefined") {
 		 		parent.$.fn.colorbox.close();
 		 	}
+			if(typeof parent.ModalManager !== "undefined") {
+				parent.ModalManager.close();
+			} 
 	 	}
 
 		else if($.urlParam('ImperaviElementId')) {
