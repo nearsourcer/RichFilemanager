@@ -939,10 +939,14 @@ var selectItem = function(data) {
 		}
 		// tinymce 4 and colorbox
 	 	if($.urlParam('field_name')) {
-	 		var field = $(parent.document.getElementById($.urlParam('field_name')));
-	 		
-	 		field.val(url);
-	 		field.trigger('change');
+	 		if(typeof parent.$ !== undefined) {
+		 		var field = parent.$(parent.document.getElementById($.urlParam('field_name')));
+		 		
+		 		field.val(url);
+		 		field.trigger('change');
+	 		} else {
+	 			parent.document.getElementById($.urlParam('field_name')).value = url;
+	 		}
 
 	 		if(typeof parent.tinyMCE !== "undefined") {
 		 		parent.tinyMCE.activeEditor.windowManager.close();
